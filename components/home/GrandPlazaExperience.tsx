@@ -1,0 +1,89 @@
+import Link from "next/link";
+
+export default function GrandPlazaExperience() {
+  return (
+    <div style={{ background: "rgb(255, 255, 255)" }}>
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-16 lg:py-24">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+
+          {/* Left: Text */}
+          <div>
+            <p
+              className="mb-4"
+              style={{
+                fontFamily: "Inter, sans-serif",
+                fontSize: "10px",
+                letterSpacing: "0.2em",
+                fontWeight: 500,
+                color: "rgb(198, 163, 85)",
+                textTransform: "uppercase",
+              }}
+            >
+              The Grand Plaza Experience
+            </p>
+
+            <h2
+              className="mb-5"
+              style={{
+                fontFamily: '"Cormorant Garamond", serif',
+                fontSize: "clamp(32px, 3.5vw, 58px)",
+                fontWeight: 400,
+                color: "rgb(17, 17, 17)",
+                lineHeight: 1.08,
+              }}
+            >
+              Above the City.
+              <br />
+              <em style={{ fontStyle: "italic", fontWeight: 300 }}>
+                Beyond the Ordinary.
+              </em>
+            </h2>
+
+            <p
+              className="mb-8 max-w-md"
+              style={{
+                fontFamily: "Inter, sans-serif",
+                fontSize: "14px",
+                fontWeight: 300,
+                color: "rgb(102, 102, 102)",
+                lineHeight: 1.75,
+              }}
+            >
+              Set high above downtown Chicago, The Penthouses at Grand Plaza
+              combine privacy, space, and skyline views for guests who want more
+              than a standard hotel stay.
+            </p>
+
+            <Link
+              href="/penthouses"
+              className="text-[#111] border border-[#111] hover:bg-[#111] hover:text-white transition-colors"
+              style={{
+                display: "inline-block",
+                fontFamily: "Inter, sans-serif",
+                fontSize: "10px",
+                letterSpacing: "0.16em",
+                fontWeight: 500,
+                padding: "13px 22px",
+                textDecoration: "none",
+              }}
+            >
+              LEARN MORE
+            </Link>
+          </div>
+
+          {/* Right: Image */}
+          <div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://media.base44.com/images/public/6a19a1ea36ff0cb3ba316a87/c3a0cccc5_13_540NStateSt_5506_2_DiningRoom_HiRes.jpg"
+              alt="Grand Plaza penthouse living and dining space"
+              className="w-full object-cover"
+              style={{ height: "clamp(280px, 40vw, 480px)", display: "block" }}
+            />
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
