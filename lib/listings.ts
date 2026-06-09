@@ -1,5 +1,15 @@
 import { bookingEngineFetch } from "./guesty";
 
+// In-memory cache — survives across requests within the same server process.
+const cache = global as typeof global & {
+  _listingsCache?: { data: ListingCard[]; expiresAt: number };
+  _listingCache?: Record<string, { data: ListingDetail; expiresAt: number }>;
+  _calendarCache?: Record<string, { data: { days: CalendarDay[]; totalPrice: number }; expiresAt: number }>;
+};
+
+const LISTINGS_TTL  = 5 * 60 * 1000;   // 5 min — listing info rarely changes
+const CALENDAR_TTL  = 10 * 60 * 1000;  // 10 min — availability changes more often
+
 export interface ListingCard {
   id: string;
   name: string;
@@ -88,17 +98,27 @@ function mapDetail(r: GuestyListing): ListingDetail {
 }
 
 export async function fetchListings(): Promise<ListingCard[]> {
+  if (cache._listingsCache && Date.now() < cache._listingsCache.expiresAt) {
+    return cache._listingsCache.data;
+  }
   const res = await bookingEngineFetch("/api/listings?limit=50");
   if (!res.ok) throw new Error(`Guesty listings failed: ${res.status}`);
   const data = await res.json();
-  return (data.results as GuestyListing[]).map(mapCard);
+  const listings = (data.results as GuestyListing[]).map(mapCard);
+  cache._listingsCache = { data: listings, expiresAt: Date.now() + LISTINGS_TTL };
+  return listings;
 }
 
 export async function fetchListing(id: string): Promise<ListingDetail> {
+  cache._listingCache ??= {};
+  const cached = cache._listingCache[id];
+  if (cached && Date.now() < cached.expiresAt) return cached.data;
   const res = await bookingEngineFetch(`/api/listings/${id}`);
   if (!res.ok) throw new Error(`Guesty listing ${id} failed: ${res.status}`);
   const r = await res.json();
-  return mapDetail(r);
+  const detail = mapDetail(r);
+  cache._listingCache[id] = { data: detail, expiresAt: Date.now() + LISTINGS_TTL };
+  return detail;
 }
 
 export interface CalendarDay {
@@ -112,6 +132,10 @@ export async function fetchCalendar(
   checkIn: string,
   checkOut: string
 ): Promise<{ days: CalendarDay[]; totalPrice: number }> {
+  cache._calendarCache ??= {};
+  const key = `${id}|${checkIn}|${checkOut}`;
+  const cached = cache._calendarCache[key];
+  if (cached && Date.now() < cached.expiresAt) return cached.data;
   const res = await bookingEngineFetch(
     `/api/listings/${id}/calendar?from=${checkIn}&to=${checkOut}`
   );
@@ -130,5 +154,7 @@ export async function fetchCalendar(
     .filter((d) => d.available && d.price)
     .reduce((sum, d) => sum + (d.price ?? 0), 0);
 
-  return { days, totalPrice };
+  const result = { days, totalPrice };
+  cache._calendarCache![key] = { data: result, expiresAt: Date.now() + CALENDAR_TTL };
+  return result;
 }
