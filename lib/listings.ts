@@ -113,6 +113,22 @@ export async function fetchListing(id: string): Promise<ListingDetail> {
   cache._listingCache ??= {};
   const cached = cache._listingCache[id];
   if (cached && Date.now() < cached.expiresAt) return cached.data;
+
+  // Warm the list cache if empty — one Guesty call serves all 11 detail pages.
+  if (!cache._listingsCache || Date.now() >= cache._listingsCache.expiresAt) {
+    await fetchListings();
+  }
+  const listCached = cache._listingsCache;
+  if (listCached && Date.now() < listCached.expiresAt) {
+    const match = listCached.data.find((l) => l.id === id);
+    if (match) {
+      const detail: ListingDetail = { ...match, cleaningFee: 0, space: "" };
+      cache._listingCache[id] = { data: detail, expiresAt: listCached.expiresAt };
+      return detail;
+    }
+  }
+
+  // Fallback: fetch individual listing only if not found in list.
   const res = await bookingEngineFetch(`/api/listings/${id}`);
   if (!res.ok) throw new Error(`Guesty listing ${id} failed: ${res.status}`);
   const r = await res.json();
