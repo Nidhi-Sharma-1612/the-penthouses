@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Hero from "@/components/home/Hero";
 import FeaturesStrip from "@/components/home/FeaturesStrip";
 import GrandPlazaExperience from "@/components/home/GrandPlazaExperience";

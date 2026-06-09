@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { fetchListings, type ListingCard } from "@/lib/listings";
 import PenthousesClient from "./PenthousesClient";
 
