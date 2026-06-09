@@ -19,7 +19,7 @@ const inter = Inter({
   display: "swap",
 });
 
-const SITE_URL = "https://penthousesgrandplaza.com";
+const SITE_URL = "https://james.weblaucher.com";
 const LOGO_URL =
   "https://media.base44.com/images/public/6a19a1ea36ff0cb3ba316a87/1b5846047_logo.png";
 const OG_IMAGE =

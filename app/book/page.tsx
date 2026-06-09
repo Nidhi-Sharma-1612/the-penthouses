@@ -1,13 +1,118 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import type { ListingCard } from "@/lib/listings";
+import DatePicker from "@/components/ui/DatePicker";
+
+function localDateStr(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return localDateStr(d);
+}
+
+interface FormState {
+  listingId: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+}
 
 export default function BookPage() {
-  const [submitted, setSubmitted] = useState(false);
+  const [listings, setListings] = useState<ListingCard[]>([]);
+  const [loadingListings, setLoadingListings] = useState(true);
 
-  function handleSubmit(e: React.FormEvent) {
+  const [form, setForm] = useState<FormState>({
+    listingId: "",
+    checkIn: "",
+    checkOut: "",
+    guests: 2,
+    name: "",
+    email: "",
+    phone: "",
+    message: "",
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [reservationId, setReservationId] = useState("");
+  const [nights, setNights] = useState(0);
+  const [unavailableDates, setUnavailableDates] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch("/api/listings")
+      .then((r) => r.json())
+      .then((data) => {
+        setListings(Array.isArray(data) ? data : []);
+        setLoadingListings(false);
+      })
+      .catch(() => setLoadingListings(false));
+  }, []);
+
+  useEffect(() => {
+    if (form.checkIn && form.checkOut) {
+      const n = Math.round(
+        (new Date(form.checkOut).getTime() - new Date(form.checkIn).getTime()) / 86400000
+      );
+      setNights(n > 0 ? n : 0);
+    } else {
+      setNights(0);
+    }
+  }, [form.checkIn, form.checkOut]);
+
+  useEffect(() => {
+    if (!form.listingId) { setUnavailableDates(new Set()); return; }
+    const from = localDateStr();
+    const to = addDays(from, 90);
+    fetch(`/api/listings/${form.listingId}/calendar?checkIn=${from}&checkOut=${to}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const booked = new Set<string>(
+          (data.days ?? [])
+            .filter((d: { available: boolean }) => !d.available)
+            .map((d: { date: string }) => d.date)
+        );
+        setUnavailableDates(booked);
+      })
+      .catch(() => setUnavailableDates(new Set()));
+  }, [form.listingId]);
+
+  function set<K extends keyof FormState>(key: K, val: FormState[K]) {
+    setForm((prev) => ({ ...prev, [key]: val }));
+  }
+
+  const selected = listings.find((l) => l.id === form.listingId);
+  const today = localDateStr();
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitted(true);
+    setError("");
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string" ? data.error : JSON.stringify(data.error)
+        );
+      }
+      setReservationId(data.reservationId ?? "confirmed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -39,10 +144,12 @@ export default function BookPage() {
         </div>
       </div>
 
-      {/* Form */}
+      {/* Form / Confirmation */}
       <div className="max-w-2xl mx-auto px-6 lg:px-8 py-14 lg:py-20">
-        {submitted ? (
-          <div className="text-center py-20 border border-gray-100">
+
+        {reservationId ? (
+          /* ── Confirmation ── */
+          <div className="text-center py-20 border border-gray-100 px-8">
             <p className="text-[10px] tracking-[0.2em] text-[#C6A355] mb-3 font-body">
               INQUIRY RECEIVED
             </p>
@@ -52,58 +159,84 @@ export default function BookPage() {
             >
               Thank You
             </h2>
-            <p className="text-sm text-muted-foreground font-light font-body max-w-sm mx-auto">
+            <p className="text-sm text-muted-foreground font-light font-body max-w-sm mx-auto mb-6">
               Our team will review your request and be in touch within a few hours to confirm availability and next steps.
             </p>
+            <div className="inline-block border border-gray-200 bg-gray-50 px-6 py-4">
+              <p className="text-[9px] tracking-[0.15em] text-muted-foreground font-body mb-1.5">
+                INQUIRY REFERENCE
+              </p>
+              <p className="font-mono text-sm text-foreground tracking-wide select-all">
+                {reservationId}
+              </p>
+              <p className="text-[9px] text-muted-foreground font-body mt-1.5">
+                Quote this number if you contact us
+              </p>
+            </div>
           </div>
         ) : (
+          /* ── Form ── */
           <form className="space-y-6" onSubmit={handleSubmit}>
+
+            {/* Penthouse selector */}
             <div>
               <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
                 SELECT PENTHOUSE
               </label>
-              <select
-                required
-                className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground bg-white"
-              >
-                <option value="">Choose a residence...</option>
-                <option value="5506">Penthouse #1 — 3 Bed / 2 Bath · From $899/night</option>
-                <option value="5304">Penthouse #2 — 2 Bed / 3 Bath · From $799/night</option>
-                <option value="5301">Penthouse #3 — 2 Bed / 3 Bath · From $799/night</option>
-                <option value="5108">Penthouse #4 — 2 Bed / 2 Bath · From $799/night</option>
-                <option value="5207">Penthouse #5 — 1 Bed / 1 Bath · From $399/night</option>
-                <option value="5302">Penthouse #6 — 2 Bed / 2 Bath · From $699/night</option>
-                <option value="5107">Penthouse #7 — 1 Bed / 1 Bath · From $399/night</option>
-                <option value="5203">Penthouse #9 — 1 Bed / 1 Bath · From $399/night</option>
-                <option value="5206">Penthouse #10 — 1 Bed / 1 Bath · From $299/night</option>
-                <option value="5006">Penthouse #11 — 1 Bed / 1 Bath · From $249/night</option>
-                <option value="5005">Penthouse #12 — 0 Bed / 1 Bath · From $239/night</option>
-              </select>
+              {loadingListings ? (
+                <div className="w-full border border-gray-200 px-4 py-3.5 text-sm font-body text-gray-400 bg-gray-50">
+                  Loading residences…
+                </div>
+              ) : (
+                <select
+                  required
+                  value={form.listingId}
+                  onChange={(e) => set("listingId", e.target.value)}
+                  className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground bg-white"
+                >
+                  <option value="">Choose a residence…</option>
+                  {listings.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name} — {l.beds} Bed / {l.baths} Bath · From ${l.price.toLocaleString()}/night
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
+            {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
                   CHECK-IN DATE
                 </label>
-                <input
-                  type="date"
-                  required
-                  className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground"
+                <DatePicker
+                  value={form.checkIn}
+                  onChange={(date) => {
+                    set("checkIn", date);
+                    if (form.checkOut && form.checkOut <= date) set("checkOut", "");
+                  }}
+                  unavailableDates={unavailableDates}
+                  minDate={today}
+                  placeholder="Select date"
                 />
               </div>
               <div>
                 <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
                   CHECK-OUT DATE
                 </label>
-                <input
-                  type="date"
-                  required
-                  className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground"
+                <DatePicker
+                  value={form.checkOut}
+                  onChange={(date) => set("checkOut", date)}
+                  unavailableDates={unavailableDates}
+                  minDate={form.checkIn ? addDays(form.checkIn, 1) : addDays(today, 1)}
+                  placeholder="Select date"
+                  alignRight
                 />
               </div>
             </div>
 
+            {/* Guests */}
             <div>
               <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
                 NUMBER OF GUESTS
@@ -112,12 +245,30 @@ export default function BookPage() {
                 type="number"
                 required
                 min={1}
-                max={16}
+                max={selected?.maxGuests ?? 16}
                 placeholder="e.g. 4"
+                value={form.guests}
+                onChange={(e) => set("guests", Number(e.target.value))}
                 className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground"
               />
             </div>
 
+            {/* Price preview */}
+            {selected && nights > 0 && (
+              <div className="bg-gray-50 border border-gray-100 px-4 py-4 space-y-1.5">
+                <div className="flex justify-between text-sm font-body">
+                  <span className="text-muted-foreground font-light">
+                    ${selected.price.toLocaleString()} × {nights} night{nights !== 1 ? "s" : ""}
+                  </span>
+                  <span>${(selected.price * nights).toLocaleString()}</span>
+                </div>
+                <p className="text-[10px] text-[#C6A355] font-body">
+                  Book Direct &amp; Save — ${selected.savingsPerNight}/night vs OTA
+                </p>
+              </div>
+            )}
+
+            {/* Guest details */}
             <div className="border-t border-gray-100 pt-6">
               <p className="text-[9px] tracking-[0.15em] text-muted-foreground mb-4 font-body">
                 YOUR DETAILS
@@ -126,35 +277,52 @@ export default function BookPage() {
                 <input
                   required
                   placeholder="Full name"
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
                   className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
                 />
                 <input
                   required
                   type="email"
                   placeholder="Email address"
+                  value={form.email}
+                  onChange={(e) => set("email", e.target.value)}
                   className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
                 />
                 <input
                   placeholder="Phone number (optional)"
+                  value={form.phone}
+                  onChange={(e) => set("phone", e.target.value)}
                   className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
                 />
                 <textarea
                   rows={4}
-                  placeholder="Tell us about your stay — special occasion, group composition, any requests..."
+                  placeholder="Tell us about your stay — special occasion, group composition, any requests…"
+                  value={form.message}
+                  onChange={(e) => set("message", e.target.value)}
                   className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground resize-none"
                 />
               </div>
             </div>
 
+            {/* Error */}
+            {error && (
+              <div className="border border-red-200 bg-red-50 px-4 py-3">
+                <p className="text-sm text-red-700 font-body">{error}</p>
+              </div>
+            )}
+
             <button
               type="submit"
-              className="w-full bg-foreground text-white text-[11px] tracking-[0.2em] py-5 hover:bg-gray-800 transition-colors font-body cursor-pointer"
+              disabled={submitting || loadingListings}
+              className="w-full bg-foreground text-white text-[11px] tracking-[0.2em] py-5 hover:bg-gray-800 transition-colors font-body cursor-pointer disabled:opacity-60"
             >
-              SUBMIT RESERVATION INQUIRY
+              {submitting ? "SUBMITTING…" : "SUBMIT RESERVATION INQUIRY"}
             </button>
             <p className="text-center text-xs text-muted-foreground font-body">
               No payment required now · Our team will contact you to confirm availability
             </p>
+
           </form>
         )}
       </div>
