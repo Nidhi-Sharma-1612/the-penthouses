@@ -69,9 +69,10 @@ async function getBookingEngineToken(): Promise<string> {
   g._guestyBeTokenPromise = (async () => {
     const res = await fetch(`${BOOKING_API_BASE}/oauth2/token`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { "Content-Type": "application/x-www-form-urlencoded", accept: "application/json" },
       body: new URLSearchParams({
         grant_type: "client_credentials",
+        scope: "booking_engine:api",
         client_id: process.env.GUESTY_BE_CLIENT_ID!,
         client_secret: process.env.GUESTY_BE_CLIENT_SECRET!,
       }),
