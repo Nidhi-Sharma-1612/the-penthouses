@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Guesty OAuth token cache (contains a live access token)
+.guesty-token-cache.json
+
 # vercel
 .vercel
 
