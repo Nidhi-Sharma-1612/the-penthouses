@@ -1,5 +1,23 @@
 import { bookingEngineFetch } from "./guesty";
 
+// Guesty calls occasionally fail transiently (network blips, aborted fetches
+// during RSC streaming). Retry once before giving up so a single hiccup
+// doesn't blank out the listings UI.
+async function bookingEngineFetchWithRetry(path: string, retries = 2): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await bookingEngineFetch(path);
+      if (res.ok) return res;
+      lastErr = new Error(`Guesty request failed: ${res.status}`);
+    } catch (err) {
+      lastErr = err;
+    }
+    if (i < retries) await new Promise((r) => setTimeout(r, 300));
+  }
+  throw lastErr;
+}
+
 // In-memory cache — survives across requests within the same server process.
 const cache = global as typeof global & {
   _listingsCache?: { data: ListingCard[]; expiresAt: number };
@@ -101,8 +119,7 @@ export async function fetchListings(): Promise<ListingCard[]> {
   if (cache._listingsCache && Date.now() < cache._listingsCache.expiresAt) {
     return cache._listingsCache.data;
   }
-  const res = await bookingEngineFetch("/api/listings?limit=50");
-  if (!res.ok) throw new Error(`Guesty listings failed: ${res.status}`);
+  const res = await bookingEngineFetchWithRetry("/api/listings?limit=50");
   const data = await res.json();
   const listings = (data.results as GuestyListing[]).map(mapCard);
   cache._listingsCache = { data: listings, expiresAt: Date.now() + LISTINGS_TTL };
@@ -129,8 +146,7 @@ export async function fetchListing(id: string): Promise<ListingDetail> {
   }
 
   // Fallback: fetch individual listing only if not found in list.
-  const res = await bookingEngineFetch(`/api/listings/${id}`);
-  if (!res.ok) throw new Error(`Guesty listing ${id} failed: ${res.status}`);
+  const res = await bookingEngineFetchWithRetry(`/api/listings/${id}`);
   const r = await res.json();
   const detail = mapDetail(r);
   cache._listingCache[id] = { data: detail, expiresAt: Date.now() + LISTINGS_TTL };
@@ -152,10 +168,9 @@ export async function fetchCalendar(
   const key = `${id}|${checkIn}|${checkOut}`;
   const cached = cache._calendarCache[key];
   if (cached && Date.now() < cached.expiresAt) return cached.data;
-  const res = await bookingEngineFetch(
+  const res = await bookingEngineFetchWithRetry(
     `/api/listings/${id}/calendar?from=${checkIn}&to=${checkOut}`
   );
-  if (!res.ok) throw new Error(`Guesty calendar failed: ${res.status}`);
   const data = await res.json();
 
   const days: CalendarDay[] = (Array.isArray(data) ? data : []).map(

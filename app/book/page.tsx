@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ListingCard } from "@/lib/listings";
 import DatePicker from "@/components/ui/DatePicker";
+import GuestyPaymentForm, { type GuestyPaymentFormHandle } from "@/components/ui/GuestyPaymentForm";
 
 function localDateStr(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -40,11 +41,14 @@ export default function BookPage() {
     message: "",
   });
 
+  const [step, setStep] = useState<"details" | "payment" | "done">("details");
+  const [quote, setQuote] = useState<{ quoteId: string; ratePlanId: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [reservationId, setReservationId] = useState("");
   const [nights, setNights] = useState(0);
   const [unavailableDates, setUnavailableDates] = useState<Set<string>>(new Set());
+  const paymentRef = useRef<GuestyPaymentFormHandle>(null);
 
   useEffect(() => {
     fetch("/api/listings")
@@ -90,16 +94,69 @@ export default function BookPage() {
 
   const selected = listings.find((l) => l.id === form.listingId);
   const today = localDateStr();
+  const total = selected ? selected.price * nights : 0;
+  const paymentConfigured = Boolean(process.env.NEXT_PUBLIC_GUESTY_PAYMENT_PROVIDER_ID);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleContinue(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setSubmitting(true);
     try {
+      const res = await fetch("/api/reservations/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId: form.listingId,
+          checkIn: form.checkIn,
+          checkOut: form.checkOut,
+          guests: form.guests,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string" ? data.error : JSON.stringify(data.error)
+        );
+      }
+      setQuote({ quoteId: data.quoteId, ratePlanId: data.ratePlanId });
+      setStep("payment");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handlePay(e: React.FormEvent) {
+    e.preventDefault();
+    if (!quote) return;
+    setError("");
+    setSubmitting(true);
+    try {
+      const nameParts = form.name.trim().split(" ");
+      const firstName = nameParts[0] || "Guest";
+      const lastName = nameParts.slice(1).join(" ") || "-";
+
+      const ccToken = await paymentRef.current!.submit({
+        amount: total,
+        currency: "USD",
+        listingId: form.listingId,
+        quoteId: quote.quoteId,
+        guest: { firstName, lastName, email: form.email, phone: form.phone },
+      });
+
       const res = await fetch("/api/reservations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          quoteId: quote.quoteId,
+          ratePlanId: quote.ratePlanId,
+          ccToken,
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          message: form.message,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -108,7 +165,9 @@ export default function BookPage() {
         );
       }
       setReservationId(data.reservationId ?? "confirmed");
+      setStep("done");
     } catch (err) {
+      if (err instanceof Error && err.message === "3DS_REDIRECT") return;
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
@@ -147,11 +206,11 @@ export default function BookPage() {
       {/* Form / Confirmation */}
       <div className="max-w-2xl mx-auto px-6 lg:px-8 py-14 lg:py-20">
 
-        {reservationId ? (
+        {step === "done" ? (
           /* ── Confirmation ── */
           <div className="text-center py-20 border border-gray-100 px-8">
             <p className="text-[10px] tracking-[0.2em] text-[#C6A355] mb-3 font-body">
-              INQUIRY RECEIVED
+              RESERVATION CONFIRMED
             </p>
             <h2
               className="font-heading text-4xl mb-3"
@@ -160,11 +219,11 @@ export default function BookPage() {
               Thank You
             </h2>
             <p className="text-sm text-muted-foreground font-light font-body max-w-sm mx-auto mb-6">
-              Our team will review your request and be in touch within a few hours to confirm availability and next steps.
+              Your payment was successful and your reservation is confirmed. A confirmation email is on its way.
             </p>
             <div className="inline-block border border-gray-200 bg-gray-50 px-6 py-4">
               <p className="text-[9px] tracking-[0.15em] text-muted-foreground font-body mb-1.5">
-                INQUIRY REFERENCE
+                CONFIRMATION CODE
               </p>
               <p className="font-mono text-sm text-foreground tracking-wide select-all">
                 {reservationId}
@@ -176,134 +235,164 @@ export default function BookPage() {
           </div>
         ) : (
           /* ── Form ── */
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={step === "details" ? handleContinue : handlePay}>
 
-            {/* Penthouse selector */}
-            <div>
-              <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
-                SELECT PENTHOUSE
-              </label>
-              {loadingListings ? (
-                <div className="w-full border border-gray-200 px-4 py-3.5 text-sm font-body text-gray-400 bg-gray-50">
-                  Loading residences…
+            {step === "details" ? (
+              <>
+                {/* Penthouse selector */}
+                <div>
+                  <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
+                    SELECT PENTHOUSE
+                  </label>
+                  {loadingListings ? (
+                    <div className="w-full border border-gray-200 px-4 py-3.5 text-sm font-body text-gray-400 bg-gray-50">
+                      Loading residences…
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={form.listingId}
+                      onChange={(e) => set("listingId", e.target.value)}
+                      className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground bg-white"
+                    >
+                      <option value="">Choose a residence…</option>
+                      {listings.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name} — {l.beds} Bed / {l.baths} Bath · From ${l.price.toLocaleString()}/night
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-              ) : (
-                <select
-                  required
-                  value={form.listingId}
-                  onChange={(e) => set("listingId", e.target.value)}
-                  className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground bg-white"
-                >
-                  <option value="">Choose a residence…</option>
-                  {listings.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name} — {l.beds} Bed / {l.baths} Bath · From ${l.price.toLocaleString()}/night
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
 
-            {/* Dates */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
-                  CHECK-IN DATE
-                </label>
-                <DatePicker
-                  value={form.checkIn}
-                  onChange={(date) => {
-                    set("checkIn", date);
-                    if (form.checkOut && form.checkOut <= date) set("checkOut", "");
-                  }}
-                  unavailableDates={unavailableDates}
-                  minDate={today}
-                  placeholder="Select date"
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
-                  CHECK-OUT DATE
-                </label>
-                <DatePicker
-                  value={form.checkOut}
-                  onChange={(date) => set("checkOut", date)}
-                  unavailableDates={unavailableDates}
-                  minDate={form.checkIn ? addDays(form.checkIn, 1) : addDays(today, 1)}
-                  placeholder="Select date"
-                  alignRight
-                />
-              </div>
-            </div>
-
-            {/* Guests */}
-            <div>
-              <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
-                NUMBER OF GUESTS
-              </label>
-              <input
-                type="number"
-                required
-                min={1}
-                max={selected?.maxGuests ?? 16}
-                placeholder="e.g. 4"
-                value={form.guests}
-                onChange={(e) => set("guests", Number(e.target.value))}
-                className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground"
-              />
-            </div>
-
-            {/* Price preview */}
-            {selected && nights > 0 && (
-              <div className="bg-gray-50 border border-gray-100 px-4 py-4 space-y-1.5">
-                <div className="flex justify-between text-sm font-body">
-                  <span className="text-muted-foreground font-light">
-                    ${selected.price.toLocaleString()} × {nights} night{nights !== 1 ? "s" : ""}
-                  </span>
-                  <span>${(selected.price * nights).toLocaleString()}</span>
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
+                      CHECK-IN DATE
+                    </label>
+                    <DatePicker
+                      value={form.checkIn}
+                      onChange={(date) => {
+                        set("checkIn", date);
+                        if (form.checkOut && form.checkOut <= date) set("checkOut", "");
+                      }}
+                      unavailableDates={unavailableDates}
+                      minDate={today}
+                      placeholder="Select date"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
+                      CHECK-OUT DATE
+                    </label>
+                    <DatePicker
+                      value={form.checkOut}
+                      onChange={(date) => set("checkOut", date)}
+                      unavailableDates={unavailableDates}
+                      minDate={form.checkIn ? addDays(form.checkIn, 1) : addDays(today, 1)}
+                      placeholder="Select date"
+                      alignRight
+                    />
+                  </div>
                 </div>
-                <p className="text-[10px] text-[#C6A355] font-body">
-                  Book Direct &amp; Save — ${selected.savingsPerNight}/night vs OTA
-                </p>
-              </div>
+
+                {/* Guests */}
+                <div>
+                  <label className="block text-[9px] tracking-[0.15em] text-foreground mb-2 font-body">
+                    NUMBER OF GUESTS
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={selected?.maxGuests ?? 16}
+                    placeholder="e.g. 4"
+                    value={form.guests}
+                    onChange={(e) => set("guests", Number(e.target.value))}
+                    className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground"
+                  />
+                </div>
+
+                {/* Price preview */}
+                {selected && nights > 0 && (
+                  <div className="bg-gray-50 border border-gray-100 px-4 py-4 space-y-1.5">
+                    <div className="flex justify-between text-sm font-body">
+                      <span className="text-muted-foreground font-light">
+                        ${selected.price.toLocaleString()} × {nights} night{nights !== 1 ? "s" : ""}
+                      </span>
+                      <span>${total.toLocaleString()}</span>
+                    </div>
+                    <p className="text-[10px] text-[#C6A355] font-body">
+                      Book Direct &amp; Save — ${selected.savingsPerNight}/night vs OTA
+                    </p>
+                  </div>
+                )}
+
+                {/* Guest details */}
+                <div className="border-t border-gray-100 pt-6">
+                  <p className="text-[9px] tracking-[0.15em] text-muted-foreground mb-4 font-body">
+                    YOUR DETAILS
+                  </p>
+                  <div className="space-y-4">
+                    <input
+                      required
+                      placeholder="Full name"
+                      value={form.name}
+                      onChange={(e) => set("name", e.target.value)}
+                      className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
+                    />
+                    <input
+                      required
+                      type="email"
+                      placeholder="Email address"
+                      value={form.email}
+                      onChange={(e) => set("email", e.target.value)}
+                      className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
+                    />
+                    <input
+                      placeholder="Phone number (optional)"
+                      value={form.phone}
+                      onChange={(e) => set("phone", e.target.value)}
+                      className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
+                    />
+                    <textarea
+                      rows={4}
+                      placeholder="Tell us about your stay — special occasion, group composition, any requests…"
+                      value={form.message}
+                      onChange={(e) => set("message", e.target.value)}
+                      className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground resize-none"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Booking summary */}
+                <div className="bg-gray-50 border border-gray-100 px-4 py-4 space-y-1.5">
+                  <div className="flex justify-between text-sm font-body">
+                    <span className="text-muted-foreground font-light">{selected?.name}</span>
+                    <span>{form.checkIn} → {form.checkOut}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-body">
+                    <span className="text-muted-foreground font-light">
+                      ${selected?.price.toLocaleString()} × {nights} night{nights !== 1 ? "s" : ""}
+                    </span>
+                    <span>${total.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-semibold font-body border-t border-gray-100 pt-2">
+                    <span>Total due</span>
+                    <span>${total.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <GuestyPaymentForm
+                  ref={paymentRef}
+                  providerId={process.env.NEXT_PUBLIC_GUESTY_PAYMENT_PROVIDER_ID ?? ""}
+                  containerId="guesty-payment-book"
+                />
+              </>
             )}
-
-            {/* Guest details */}
-            <div className="border-t border-gray-100 pt-6">
-              <p className="text-[9px] tracking-[0.15em] text-muted-foreground mb-4 font-body">
-                YOUR DETAILS
-              </p>
-              <div className="space-y-4">
-                <input
-                  required
-                  placeholder="Full name"
-                  value={form.name}
-                  onChange={(e) => set("name", e.target.value)}
-                  className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
-                />
-                <input
-                  required
-                  type="email"
-                  placeholder="Email address"
-                  value={form.email}
-                  onChange={(e) => set("email", e.target.value)}
-                  className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
-                />
-                <input
-                  placeholder="Phone number (optional)"
-                  value={form.phone}
-                  onChange={(e) => set("phone", e.target.value)}
-                  className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
-                />
-                <textarea
-                  rows={4}
-                  placeholder="Tell us about your stay — special occasion, group composition, any requests…"
-                  value={form.message}
-                  onChange={(e) => set("message", e.target.value)}
-                  className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground resize-none"
-                />
-              </div>
-            </div>
 
             {/* Error */}
             {error && (
@@ -314,13 +403,28 @@ export default function BookPage() {
 
             <button
               type="submit"
-              disabled={submitting || loadingListings}
+              disabled={submitting || loadingListings || (step === "payment" && !paymentConfigured)}
               className="w-full bg-foreground text-white text-[11px] tracking-[0.2em] py-5 hover:bg-gray-800 transition-colors font-body cursor-pointer disabled:opacity-60"
             >
-              {submitting ? "SUBMITTING…" : "SUBMIT RESERVATION INQUIRY"}
+              {step === "details"
+                ? (submitting ? "CHECKING AVAILABILITY…" : "CONTINUE TO PAYMENT")
+                : (submitting ? "PROCESSING…" : "BOOK & PAY")}
             </button>
+
+            {step === "payment" && (
+              <button
+                type="button"
+                onClick={() => { setStep("details"); setError(""); }}
+                className="w-full text-center text-[11px] tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors font-body cursor-pointer"
+              >
+                ← BACK TO DETAILS
+              </button>
+            )}
+
             <p className="text-center text-xs text-muted-foreground font-body">
-              No payment required now · Our team will contact you to confirm availability
+              {step === "details"
+                ? "Secure checkout · Best rate guaranteed · Direct confirmation"
+                : "Your card will be charged according to our payment schedule. You'll receive a confirmation email immediately."}
             </p>
 
           </form>
