@@ -15,6 +15,12 @@ function addDays(dateStr: string, n: number): string {
   return localDateStr(d);
 }
 
+function nightsBetween(checkIn: string, checkOut: string): number {
+  return Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000);
+}
+
+const DEFAULT_MIN_NIGHTS = 4;
+
 interface FormState {
   listingId: string;
   checkIn: string;
@@ -42,12 +48,20 @@ export default function BookPage() {
   });
 
   const [step, setStep] = useState<"details" | "payment" | "done">("details");
-  const [quote, setQuote] = useState<{ quoteId: string; ratePlanId: string } | null>(null);
+  const [quote, setQuote] = useState<{
+    quoteId: string;
+    ratePlanId: string;
+    fareAccommodation: number;
+    cleaningFee: number;
+    taxes: number;
+    total: number;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [reservationId, setReservationId] = useState("");
   const [nights, setNights] = useState(0);
   const [unavailableDates, setUnavailableDates] = useState<Set<string>>(new Set());
+  const [minNightsByDate, setMinNightsByDate] = useState<Record<string, number>>({});
   const paymentRef = useRef<GuestyPaymentFormHandle>(null);
 
   useEffect(() => {
@@ -72,7 +86,11 @@ export default function BookPage() {
   }, [form.checkIn, form.checkOut]);
 
   useEffect(() => {
-    if (!form.listingId) { setUnavailableDates(new Set()); return; }
+    if (!form.listingId) {
+      setUnavailableDates(new Set());
+      setMinNightsByDate({});
+      return;
+    }
     const from = localDateStr();
     const to = addDays(from, 90);
     fetch(`/api/listings/${form.listingId}/calendar?checkIn=${from}&checkOut=${to}`)
@@ -84,8 +102,17 @@ export default function BookPage() {
             .map((d: { date: string }) => d.date)
         );
         setUnavailableDates(booked);
+
+        const minNights: Record<string, number> = {};
+        (data.days ?? []).forEach((d: { date: string; minNights?: number | null }) => {
+          if (d.minNights) minNights[d.date] = d.minNights;
+        });
+        setMinNightsByDate(minNights);
       })
-      .catch(() => setUnavailableDates(new Set()));
+      .catch(() => {
+        setUnavailableDates(new Set());
+        setMinNightsByDate({});
+      });
   }, [form.listingId]);
 
   function set<K extends keyof FormState>(key: K, val: FormState[K]) {
@@ -96,6 +123,7 @@ export default function BookPage() {
   const today = localDateStr();
   const total = selected ? selected.price * nights : 0;
   const paymentConfigured = Boolean(process.env.NEXT_PUBLIC_GUESTY_PAYMENT_PROVIDER_ID);
+  const effectiveMinNights = (form.checkIn && minNightsByDate[form.checkIn]) || DEFAULT_MIN_NIGHTS;
 
   async function handleContinue(e: React.FormEvent) {
     e.preventDefault();
@@ -118,7 +146,14 @@ export default function BookPage() {
           typeof data.error === "string" ? data.error : JSON.stringify(data.error)
         );
       }
-      setQuote({ quoteId: data.quoteId, ratePlanId: data.ratePlanId });
+      setQuote({
+        quoteId: data.quoteId,
+        ratePlanId: data.ratePlanId,
+        fareAccommodation: data.fareAccommodation,
+        cleaningFee: data.cleaningFee,
+        taxes: data.taxes,
+        total: data.total,
+      });
       setStep("payment");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -138,11 +173,17 @@ export default function BookPage() {
       const lastName = nameParts.slice(1).join(" ") || "-";
 
       const ccToken = await paymentRef.current!.submit({
-        amount: total,
+        amount: quote.total,
         currency: "USD",
         listingId: form.listingId,
         quoteId: quote.quoteId,
         guest: { firstName, lastName, email: form.email, phone: form.phone },
+        threeDS: {
+          amount: quote.total,
+          currency: "USD",
+          successURL: `${window.location.origin}/payment-result?status=success&quoteId=${quote.quoteId}`,
+          failureURL: `${window.location.origin}/payment-result?status=failure&quoteId=${quote.quoteId}`,
+        },
       });
 
       const res = await fetch("/api/reservations", {
@@ -275,7 +316,10 @@ export default function BookPage() {
                       value={form.checkIn}
                       onChange={(date) => {
                         set("checkIn", date);
-                        if (form.checkOut && form.checkOut <= date) set("checkOut", "");
+                        const minNightsForDate = minNightsByDate[date] || DEFAULT_MIN_NIGHTS;
+                        if (form.checkOut && nightsBetween(date, form.checkOut) < minNightsForDate) {
+                          set("checkOut", "");
+                        }
                       }}
                       unavailableDates={unavailableDates}
                       minDate={today}
@@ -290,12 +334,18 @@ export default function BookPage() {
                       value={form.checkOut}
                       onChange={(date) => set("checkOut", date)}
                       unavailableDates={unavailableDates}
-                      minDate={form.checkIn ? addDays(form.checkIn, 1) : addDays(today, 1)}
+                      minDate={form.checkIn ? addDays(form.checkIn, effectiveMinNights) : addDays(today, DEFAULT_MIN_NIGHTS)}
                       placeholder="Select date"
                       alignRight
                     />
                   </div>
                 </div>
+
+                {form.listingId && (
+                  <p className="text-[10px] text-muted-foreground font-body -mt-2">
+                    Minimum stay: {effectiveMinNights} night{effectiveMinNights !== 1 ? "s" : ""}
+                  </p>
+                )}
 
                 {/* Guests */}
                 <div>
@@ -325,6 +375,9 @@ export default function BookPage() {
                     </div>
                     <p className="text-[10px] text-[#C6A355] font-body">
                       Book Direct &amp; Save — ${selected.savingsPerNight}/night vs OTA
+                    </p>
+                    <p className="text-[10px] text-muted-foreground font-body">
+                      Estimated — final pricing with taxes &amp; fees shown on the next step
                     </p>
                   </div>
                 )}
@@ -376,13 +429,23 @@ export default function BookPage() {
                   </div>
                   <div className="flex justify-between text-sm font-body">
                     <span className="text-muted-foreground font-light">
-                      ${selected?.price.toLocaleString()} × {nights} night{nights !== 1 ? "s" : ""}
+                      {nights} night{nights !== 1 ? "s" : ""} accommodation
                     </span>
-                    <span>${total.toLocaleString()}</span>
+                    <span>${(quote?.fareAccommodation ?? 0).toLocaleString()}</span>
+                  </div>
+                  {!!quote?.cleaningFee && (
+                    <div className="flex justify-between text-sm font-body">
+                      <span className="text-muted-foreground font-light">Cleaning fee</span>
+                      <span>${quote.cleaningFee.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-body">
+                    <span className="text-muted-foreground font-light">Taxes &amp; fees</span>
+                    <span>${(quote?.taxes ?? 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm font-semibold font-body border-t border-gray-100 pt-2">
                     <span>Total due</span>
-                    <span>${total.toLocaleString()}</span>
+                    <span>${(quote?.total ?? 0).toFixed(2)}</span>
                   </div>
                 </div>
 

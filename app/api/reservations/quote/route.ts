@@ -38,11 +38,29 @@ export async function POST(req: Request) {
 
     const quoteId = quote._id as string;
 
-    type RatePlan = { ratePlanId?: string; _id?: string };
-    const ratePlans = quote.ratePlans as RatePlan[] | undefined;
-    const ratePlanId = ratePlans?.[0]?.ratePlanId ?? ratePlans?.[0]?._id ?? "default-rateplan-id";
+    interface InvoiceItem { amount: number }
+    interface Money {
+      fareAccommodation?: number;
+      fareCleaning?: number;
+      totalTaxes?: number;
+      invoiceItems?: InvoiceItem[];
+    }
+    type RatePlanEntry = { ratePlanId?: string; ratePlan?: { _id?: string; money?: Money } };
 
-    return NextResponse.json({ quoteId, ratePlanId });
+    const ratePlanEntry = (quote.rates as { ratePlans?: RatePlanEntry[] } | undefined)
+      ?.ratePlans?.[0];
+    const ratePlanId =
+      ratePlanEntry?.ratePlanId ?? ratePlanEntry?.ratePlan?._id ?? "default-rateplan-id";
+
+    const money = ratePlanEntry?.ratePlan?.money;
+    const fareAccommodation = money?.fareAccommodation ?? 0;
+    const cleaningFee = money?.fareCleaning ?? 0;
+    const taxes = money?.totalTaxes ?? 0;
+    const total = money?.invoiceItems?.length
+      ? money.invoiceItems.reduce((sum, item) => sum + item.amount, 0)
+      : fareAccommodation + cleaningFee + taxes;
+
+    return NextResponse.json({ quoteId, ratePlanId, fareAccommodation, cleaningFee, taxes, total });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

@@ -18,6 +18,12 @@ function addDays(dateStr: string, n: number): string {
   return localDateStr(d);
 }
 
+function nightsBetween(checkIn: string, checkOut: string): number {
+  return Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000);
+}
+
+const DEFAULT_MIN_NIGHTS = 4;
+
 const LOCATION_HIGHLIGHTS = [
   "Walk Score: 100",
   "CTA Red Line: Corner",
@@ -40,7 +46,14 @@ export default function PenthousePage() {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [step, setStep] = useState<"details" | "payment" | "done">("details");
-  const [quote, setQuote] = useState<{ quoteId: string; ratePlanId: string } | null>(null);
+  const [quote, setQuote] = useState<{
+    quoteId: string;
+    ratePlanId: string;
+    fareAccommodation: number;
+    cleaningFee: number;
+    taxes: number;
+    total: number;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [reservationId, setReservationId] = useState("");
@@ -48,6 +61,7 @@ export default function PenthousePage() {
   const [totalPrice, setTotalPrice] = useState<number | null>(null);
   const [nights, setNights] = useState(0);
   const [unavailableDates, setUnavailableDates] = useState<Set<string>>(new Set());
+  const [minNightsByDate, setMinNightsByDate] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetch(`/api/listings/${id}`)
@@ -70,6 +84,12 @@ export default function PenthousePage() {
             .map((d: { date: string }) => d.date)
         );
         setUnavailableDates(booked);
+
+        const minNights: Record<string, number> = {};
+        (data.days ?? []).forEach((d: { date: string; minNights?: number | null }) => {
+          if (d.minNights) minNights[d.date] = d.minNights;
+        });
+        setMinNightsByDate(minNights);
       })
       .catch(() => {});
   }, [id]);
@@ -102,7 +122,14 @@ export default function PenthousePage() {
       if (!res.ok) {
         throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
       }
-      setQuote({ quoteId: data.quoteId, ratePlanId: data.ratePlanId });
+      setQuote({
+        quoteId: data.quoteId,
+        ratePlanId: data.ratePlanId,
+        fareAccommodation: data.fareAccommodation,
+        cleaningFee: data.cleaningFee,
+        taxes: data.taxes,
+        total: data.total,
+      });
       setStep("payment");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -122,11 +149,17 @@ export default function PenthousePage() {
       const lastName = nameParts.slice(1).join(" ") || "-";
 
       const ccToken = await paymentRef.current!.submit({
-        amount: (displayPrice ?? 0) + ph.cleaningFee,
+        amount: quote.total,
         currency: "USD",
         listingId: ph.id,
         quoteId: quote.quoteId,
         guest: { firstName, lastName, email, phone },
+        threeDS: {
+          amount: quote.total,
+          currency: "USD",
+          successURL: `${window.location.origin}/payment-result?status=success&quoteId=${quote.quoteId}`,
+          failureURL: `${window.location.origin}/payment-result?status=failure&quoteId=${quote.quoteId}`,
+        },
       });
 
       const res = await fetch("/api/reservations", {
@@ -183,6 +216,7 @@ export default function PenthousePage() {
 
   const displayPrice = totalPrice ?? (nights > 0 ? ph.price * nights : null);
   const paymentConfigured = Boolean(process.env.NEXT_PUBLIC_GUESTY_PAYMENT_PROVIDER_ID);
+  const effectiveMinNights = (checkIn && minNightsByDate[checkIn]) || DEFAULT_MIN_NIGHTS;
 
   return (
     <div style={{ backgroundColor: "#ffffff" }} className="pb-24 lg:pb-0">
@@ -395,7 +429,10 @@ export default function PenthousePage() {
                               value={checkIn}
                               onChange={(date) => {
                                 setCheckIn(date);
-                                if (checkOut && checkOut <= date) setCheckOut("");
+                                const minNightsForDate = minNightsByDate[date] || DEFAULT_MIN_NIGHTS;
+                                if (checkOut && nightsBetween(date, checkOut) < minNightsForDate) {
+                                  setCheckOut("");
+                                }
                               }}
                               unavailableDates={unavailableDates}
                               minDate={localDateStr()}
@@ -408,12 +445,18 @@ export default function PenthousePage() {
                               value={checkOut}
                               onChange={setCheckOut}
                               unavailableDates={unavailableDates}
-                              minDate={checkIn ? addDays(checkIn, 1) : addDays(localDateStr(), 1)}
+                              minDate={checkIn ? addDays(checkIn, effectiveMinNights) : addDays(localDateStr(), DEFAULT_MIN_NIGHTS)}
                               placeholder="Select"
                               alignRight
                             />
                           </div>
                         </div>
+
+                        {checkIn && (
+                          <p className="text-[10px] text-muted-foreground font-body">
+                            Minimum stay: {effectiveMinNights} night{effectiveMinNights !== 1 ? "s" : ""}
+                          </p>
+                        )}
 
                         <div>
                           <label className="block text-[9px] tracking-[0.15em] text-foreground mb-1.5 font-body">GUESTS</label>
@@ -445,6 +488,9 @@ export default function PenthousePage() {
                               <span>Total</span>
                               <span>${((displayPrice ?? 0) + ph.cleaningFee).toLocaleString()}</span>
                             </div>
+                            <p className="text-[10px] text-muted-foreground font-body">
+                              Estimated — final pricing with taxes &amp; fees shown on the next step
+                            </p>
                           </div>
                         )}
 
@@ -491,18 +537,24 @@ export default function PenthousePage() {
                             <span>{guests} guest{guests !== 1 ? "s" : ""}</span>
                           </div>
                           <div className="flex justify-between text-sm font-body">
-                            <span className="text-muted-foreground font-light">${ph.price.toLocaleString()} × {nights} night{nights !== 1 ? "s" : ""}</span>
-                            <span>${(ph.price * nights).toLocaleString()}</span>
+                            <span className="text-muted-foreground font-light">
+                              {nights} night{nights !== 1 ? "s" : ""} accommodation
+                            </span>
+                            <span>${(quote?.fareAccommodation ?? 0).toLocaleString()}</span>
                           </div>
-                          {ph.cleaningFee > 0 && (
+                          {!!quote?.cleaningFee && (
                             <div className="flex justify-between text-sm font-body">
                               <span className="text-muted-foreground font-light">Cleaning fee</span>
-                              <span>${ph.cleaningFee.toLocaleString()}</span>
+                              <span>${quote.cleaningFee.toLocaleString()}</span>
                             </div>
                           )}
+                          <div className="flex justify-between text-sm font-body">
+                            <span className="text-muted-foreground font-light">Taxes &amp; fees</span>
+                            <span>${(quote?.taxes ?? 0).toFixed(2)}</span>
+                          </div>
                           <div className="flex justify-between text-sm font-semibold font-body border-t border-gray-100 pt-2">
                             <span>Total due</span>
-                            <span>${((displayPrice ?? 0) + ph.cleaningFee).toLocaleString()}</span>
+                            <span>${(quote?.total ?? 0).toFixed(2)}</span>
                           </div>
                         </div>
 

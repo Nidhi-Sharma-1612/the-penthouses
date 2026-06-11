@@ -157,6 +157,7 @@ export interface CalendarDay {
   date: string;
   available: boolean;
   price: number | null;
+  minNights: number | null;
 }
 
 export async function fetchCalendar(
@@ -174,10 +175,11 @@ export async function fetchCalendar(
   const data = await res.json();
 
   const days: CalendarDay[] = (Array.isArray(data) ? data : []).map(
-    (d: { date: string; status: string; price?: number }) => ({
+    (d: { date: string; status: string; price?: number; minNights?: number }) => ({
       date: d.date,
       available: d.status === "available",
       price: d.price ?? null,
+      minNights: d.minNights ?? null,
     })
   );
 

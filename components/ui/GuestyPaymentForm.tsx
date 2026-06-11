@@ -10,6 +10,12 @@ interface TokenizationSubmitPayload {
   listingId: string;
   quoteId: string;
   guest: { firstName: string; lastName: string; email?: string; phone?: string };
+  threeDS?: {
+    amount: number;
+    currency: string;
+    successURL: string;
+    failureURL: string;
+  };
 }
 
 declare global {

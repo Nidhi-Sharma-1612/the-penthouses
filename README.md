@@ -34,6 +34,8 @@ Token is fetched via OAuth2 client_credentials flow and cached (in-memory + on-d
 
 Card capture uses GuestyPay's hosted Tokenization SDK (`pay.guesty.com/tokenization/v2/init.js` — see `components/ui/GuestyPaymentForm.tsx`), so card details never touch our server. The resulting `ccToken` is sent to `/api/reservations`, which confirms the booking via Guesty's `/instant` endpoint, putting it under the account's auto-payment policy.
 
+If the card issuer requires 3D Secure authentication, GuestyPay returns a `threeDS.authURL` and the guest is redirected off-site to authenticate. The `submit()` call includes `threeDS.successURL`/`failureURL` (pointing at `/payment-result`) so the guest is returned to a real page on our site afterward instead of a blank page — Guesty completes the reservation/charge server-side once 3DS succeeds.
+
 ### Environment Variables
 
 Create a `.env.local` file in the project root:
@@ -54,6 +56,7 @@ Get the Booking Engine API credentials from your Guesty dashboard under **Market
 | `/penthouses`      | All listings with live cards from Guesty                                                     |
 | `/penthouses/[id]` | Unit detail — gallery, amenities, sidebar booking + GuestyPay payment form                   |
 | `/book`            | Direct booking — penthouse selector, live quote, and instant paid confirmation via GuestyPay |
+| `/payment-result`  | Landing page after a 3D Secure redirect (success/failure)                                    |
 | `/compare`         | Side-by-side comparison vs Airbnb/VRBO                                                       |
 | `/location`        | Neighborhood highlights and map                                                              |
 | `/long-stays`      | 30+ night stay information                                                                   |
