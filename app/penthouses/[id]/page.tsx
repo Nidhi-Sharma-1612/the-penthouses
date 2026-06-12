@@ -70,11 +70,12 @@ export default function PenthousePage() {
       .catch(() => setLoading(false));
   }, [id]);
 
-  // Fetch 90-day availability once listing is known
+  // Fetch a year of availability once listing is known, so the date picker
+  // can show blocked dates across the whole booking horizon, not just 3 months.
   useEffect(() => {
     if (!id) return;
     const from = localDateStr();
-    const to = addDays(from, 90);
+    const to = addDays(from, 365);
     fetch(`/api/listings/${id}/calendar?checkIn=${from}&checkOut=${to}`)
       .then((r) => r.json())
       .then((data) => {

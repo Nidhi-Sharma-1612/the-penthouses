@@ -92,7 +92,7 @@ export default function BookPage() {
       return;
     }
     const from = localDateStr();
-    const to = addDays(from, 90);
+    const to = addDays(from, 365);
     fetch(`/api/listings/${form.listingId}/calendar?checkIn=${from}&checkOut=${to}`)
       .then((r) => r.json())
       .then((data) => {

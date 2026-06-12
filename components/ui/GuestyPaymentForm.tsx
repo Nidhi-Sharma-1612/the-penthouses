@@ -62,13 +62,13 @@ const GuestyPaymentForm = forwardRef<GuestyPaymentFormHandle, Props>(function Gu
       .render({ containerId, providerId })
       .then(() => setFormReady(true))
       .catch(() => setError("Unable to load the payment form. Please refresh and try again."));
-  }, [scriptReady, containerId, providerId]);
 
-  useEffect(() => {
     return () => {
       window.guestyTokenization?.destroy();
+      renderedRef.current = false;
+      setFormReady(false);
     };
-  }, []);
+  }, [scriptReady, containerId, providerId]);
 
   useImperativeHandle(ref, () => ({
     async submit(payload) {
@@ -83,13 +83,20 @@ const GuestyPaymentForm = forwardRef<GuestyPaymentFormHandle, Props>(function Gu
         const data = (err as { response?: { data?: unknown } })?.response?.data as
           | { message?: string; error?: { ProcessorResult?: { ResponseDescription?: string } } }
           | undefined;
-        if (data) console.error("GuestyPay decline:", data);
+        console.error("GuestyPay submit error:", err, data);
         throw new Error("Your card could not be processed. Please try a different card.");
+      }
+
+      console.log("GuestyPay submit result:", JSON.stringify(result));
+
+      if (!result) {
+        throw new Error("Please enter your card details and try again.");
       }
 
       // 3DS required — redirect; booking resumes after guest completes authentication
       const threeDS = result.threeDS as { authURL?: string } | undefined;
       if (threeDS?.authURL) {
+        console.log("3DS authURL:", threeDS.authURL);
         window.location.href = threeDS.authURL;
         throw new Error("3DS_REDIRECT");
       }
