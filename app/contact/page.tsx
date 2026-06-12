@@ -5,10 +5,41 @@ import { Mail, MapPin } from "lucide-react";
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    subject: "",
+    message: "",
+  });
 
-  function handleSubmit(e: React.FormEvent) {
+  function update<K extends keyof typeof form>(key: K, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitted(true);
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong. Please try again.");
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -123,6 +154,8 @@ export default function ContactPage() {
                     <input
                       required
                       placeholder="Full name"
+                      value={form.name}
+                      onChange={(e) => update("name", e.target.value)}
                       className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
                     />
                   </div>
@@ -134,6 +167,8 @@ export default function ContactPage() {
                       required
                       type="email"
                       placeholder="your@email.com"
+                      value={form.email}
+                      onChange={(e) => update("email", e.target.value)}
                       className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
                     />
                   </div>
@@ -144,6 +179,8 @@ export default function ContactPage() {
                   </label>
                   <input
                     placeholder="Phone number"
+                    value={form.phone}
+                    onChange={(e) => update("phone", e.target.value)}
                     className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground"
                   />
                 </div>
@@ -153,6 +190,8 @@ export default function ContactPage() {
                   </label>
                   <select
                     required
+                    value={form.subject}
+                    onChange={(e) => update("subject", e.target.value)}
                     className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body focus:outline-none focus:border-foreground bg-white"
                   >
                     <option value="">Select a topic...</option>
@@ -171,14 +210,20 @@ export default function ContactPage() {
                     rows={6}
                     required
                     placeholder="Tell us how we can help..."
+                    value={form.message}
+                    onChange={(e) => update("message", e.target.value)}
                     className="w-full border border-gray-300 px-4 py-3.5 text-sm font-body placeholder:text-gray-400 focus:outline-none focus:border-foreground resize-none"
                   />
                 </div>
+                {error && (
+                  <p className="text-xs text-red-600 font-body">{error}</p>
+                )}
                 <button
                   type="submit"
-                  className="w-full bg-foreground text-white text-[10px] tracking-[0.2em] py-4 hover:bg-gray-800 transition-colors font-body cursor-pointer"
+                  disabled={submitting}
+                  className="w-full bg-foreground text-white text-[10px] tracking-[0.2em] py-4 hover:bg-gray-800 transition-colors font-body cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  SEND MESSAGE
+                  {submitting ? "SENDING..." : "SEND MESSAGE"}
                 </button>
               </form>
             )}
