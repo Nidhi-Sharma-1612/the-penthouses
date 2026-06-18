@@ -8,7 +8,19 @@ import type { ListingCard } from "@/lib/listings";
 const filterTags = ["ALL UNITS", "TWO-STORY", "FIREPLACE", "LAKE VIEW", "BALCONY"] as const;
 type FilterTag = (typeof filterTags)[number];
 
-export default function PenthousesClient({ listings }: { listings: ListingCard[] }) {
+interface PenthousesHeader {
+  eyebrow: string;
+  heading: string;
+  body?: string;
+}
+
+export default function PenthousesClient({
+  listings,
+  header,
+}: {
+  listings: ListingCard[];
+  header: PenthousesHeader;
+}) {
   const [activeFilter, setActiveFilter] = useState<FilterTag>("ALL UNITS");
 
   const filtered =
@@ -23,13 +35,13 @@ export default function PenthousesClient({ listings }: { listings: ListingCard[]
       <div className="border-b border-gray-200 py-14 lg:py-20">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <p className="mb-3" style={{ fontFamily: "var(--font-body), sans-serif", fontSize: "10px", letterSpacing: "0.2em", color: "rgb(198, 163, 85)" }}>
-            RIVER NORTH, CHICAGO
+            {header.eyebrow}
           </p>
           <h1 className="text-5xl lg:text-6xl mb-4" style={{ fontFamily: "var(--font-heading), serif", fontWeight: 400, color: "rgb(17, 17, 17)", lineHeight: 1.1 }}>
-            The Penthouse Collection
+            {header.heading}
           </h1>
           <p className="max-w-lg leading-relaxed" style={{ fontFamily: "var(--font-body), sans-serif", fontWeight: 300, color: "rgb(71, 85, 105)" }}>
-            Eleven extraordinary residences, each uniquely positioned above the city. From intimate one-bedroom sanctuaries to expansive two-story penthouses.
+            {header.body}
           </p>
         </div>
       </div>

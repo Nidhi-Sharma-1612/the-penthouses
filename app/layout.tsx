@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
+import SiteChrome from "@/components/layout/SiteChrome";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
@@ -87,7 +88,7 @@ const jsonLdOrganization = {
   url: SITE_URL,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`h-full ${cormorant.variable} ${inter.variable}`}>
       <head>
@@ -101,9 +102,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-full flex flex-col" style={{ backgroundColor: "#ffffff" }} suppressHydrationWarning>
-        <Navbar />
-        <main className="flex-1" style={{ paddingTop: "64px" }}>{children}</main>
-        <Footer />
+        <SiteChrome navbar={<Navbar />} footer={<Footer />}>
+          {children}
+        </SiteChrome>
       </body>
     </html>
   );

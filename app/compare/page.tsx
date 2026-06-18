@@ -1,58 +1,16 @@
 import { Check, X } from "lucide-react";
 import Link from "next/link";
+import { getContentBlock } from "@/lib/content";
+import { CONTENT_DEFAULTS } from "@/lib/contentDefaults";
+import { prisma } from "@/lib/prisma";
 
-const rows = [
-  {
-    feature: "Service Fees",
-    direct: "$0",
-    airbnb: "14–16% added",
-    vrbo: "6–12% added",
-  },
-  {
-    feature: "Direct Host Communication",
-    direct: "Always",
-    airbnb: "Via platform only",
-    vrbo: "Via platform only",
-  },
-  {
-    feature: "Flexible Check-in",
-    direct: "Available on request",
-    airbnb: "Fixed times",
-    vrbo: "Fixed times",
-  },
-  {
-    feature: "Rate Negotiation",
-    direct: "Possible for long stays",
-    airbnb: "Not available",
-    vrbo: "Not available",
-  },
-  {
-    feature: "Personal Concierge",
-    direct: "Included",
-    airbnb: "Not available",
-    vrbo: "Not available",
-  },
-  {
-    feature: "Custom Requests",
-    direct: "Accommodated",
-    airbnb: "Limited",
-    vrbo: "Limited",
-  },
-  {
-    feature: "Data Privacy",
-    direct: "Private",
-    airbnb: "Shared with platform",
-    vrbo: "Shared with platform",
-  },
-  {
-    feature: "Best Rate",
-    direct: "Guaranteed",
-    airbnb: "Platform fees added",
-    vrbo: "Platform fees added",
-  },
-];
+export default async function ComparePage() {
+  const [hero, tableLabels, rows] = await Promise.all([
+    getContentBlock("compare", "hero", CONTENT_DEFAULTS.compare.hero),
+    getContentBlock("compare", "tableLabels", CONTENT_DEFAULTS.compare.tableLabels),
+    prisma.compareRow.findMany({ orderBy: { order: "asc" } }),
+  ]);
 
-export default function ComparePage() {
   return (
     <div style={{ backgroundColor: "#ffffff" }}>
 
@@ -60,17 +18,16 @@ export default function ComparePage() {
       <div className="border-b border-gray-200 py-14 lg:py-20 bg-[#FAFAFA]">
         <div className="max-w-4xl mx-auto px-6 lg:px-8 text-center">
           <p className="text-[10px] tracking-[0.2em] text-[#C6A355] mb-3 font-body">
-            THE DIRECT ADVANTAGE
+            {hero.eyebrow}
           </p>
           <h1
             className="font-heading text-5xl lg:text-6xl mb-4"
             style={{ fontWeight: 400, color: "rgb(17, 17, 17)", lineHeight: 1.1 }}
           >
-            Why Book Direct?
+            {hero.heading}
           </h1>
           <p className="text-muted-foreground font-light leading-relaxed font-body max-w-lg mx-auto">
-            A side-by-side look at the real difference between booking directly
-            with us versus through a third-party platform.
+            {hero.body}
           </p>
         </div>
       </div>
@@ -82,24 +39,24 @@ export default function ComparePage() {
             <thead>
               <tr>
                 <th className="text-left py-4 pr-8 font-body text-[9px] tracking-[0.15em] text-muted-foreground w-1/3">
-                  FEATURE
+                  {tableLabels.featureLabel}
                 </th>
                 <th className="text-center py-4 px-6 font-body text-[9px] tracking-[0.15em] bg-foreground text-[#C6A355]">
-                  BOOK DIRECT
+                  {tableLabels.directLabel}
                   <br />
-                  <span className="text-white/40 text-[8px]">The Penthouses</span>
+                  <span className="text-white/40 text-[8px]">{tableLabels.directSubLabel}</span>
                 </th>
                 <th className="text-center py-4 px-6 font-body text-[9px] tracking-[0.15em] text-muted-foreground">
-                  AIRBNB
+                  {tableLabels.airbnbLabel}
                 </th>
                 <th className="text-center py-4 px-6 font-body text-[9px] tracking-[0.15em] text-muted-foreground">
-                  VRBO
+                  {tableLabels.vrboLabel}
                 </th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={row.feature} className={i % 2 === 0 ? "bg-[#FAFAFA]" : "bg-white"}>
+                <tr key={row.id} className={i % 2 === 0 ? "bg-[#FAFAFA]" : "bg-white"}>
                   <td className="py-4 pr-8 text-sm font-light text-foreground font-body">
                     {row.feature}
                   </td>
@@ -133,7 +90,7 @@ export default function ComparePage() {
             href="/book"
             className="inline-block bg-foreground text-white text-[10px] tracking-[0.2em] px-12 py-4 hover:bg-gray-800 transition-colors font-body"
           >
-            BOOK DIRECT NOW
+            {tableLabels.ctaButtonLabel}
           </Link>
         </div>
       </div>

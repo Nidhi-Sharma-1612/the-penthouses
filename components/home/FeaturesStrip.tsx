@@ -7,46 +7,15 @@ import {
   CarFront,
   BadgeCheck,
 } from "lucide-react";
+import { getContentBlock } from "@/lib/content";
+import { CONTENT_DEFAULTS } from "@/lib/contentDefaults";
 
-const features = [
-  {
-    Icon: Building2,
-    title: "50+ FLOORS UP",
-    description: "Breathtaking skyline\nand lake views",
-  },
-  {
-    Icon: LayoutTemplate,
-    title: "SPACIOUS LAYOUTS",
-    description: "Expansive living areas\nwith refined finishes",
-  },
-  {
-    Icon: UtensilsCrossed,
-    title: "FULL KITCHENS",
-    description: "Premium appliances,\ncookware, and dining",
-  },
-  {
-    Icon: Wind,
-    title: "BALCONIES",
-    description: "Private outdoor space in\nmost residences",
-  },
-  {
-    Icon: Flame,
-    title: "FIREPLACES",
-    description: "Warmth and ambiance\nin select penthouses",
-  },
-  {
-    Icon: CarFront,
-    title: "PARKING",
-    description: "Limited discount parking\navailable",
-  },
-  {
-    Icon: BadgeCheck,
-    title: "DIRECT BOOKING",
-    description: "Best rates. No fees.\nPersonalized service.",
-  },
-];
+const ICONS = [Building2, LayoutTemplate, UtensilsCrossed, Wind, Flame, CarFront, BadgeCheck];
 
-export default function FeaturesStrip() {
+export default async function FeaturesStrip() {
+  const content = await getContentBlock("home", "featuresStrip", CONTENT_DEFAULTS.home.featuresStrip);
+  const features = content.items.map((item, i) => ({ ...item, Icon: ICONS[i] ?? Building2 }));
+
   return (
     <div
       style={{

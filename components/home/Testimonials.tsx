@@ -1,25 +1,7 @@
 import { Star } from "lucide-react";
-
-const testimonials = [
-  {
-    quote:
-      "Absolutely breathtaking. Woke up to the most incredible view of Lake Michigan every morning. The space was enormous — we had a group of 6 and everyone had their own area. Booking direct was seamless and the team was incredibly responsive.",
-    name: "Sarah M.",
-    unit: "Penthouse 5401 · November 2024",
-  },
-  {
-    quote:
-      "We stayed for our anniversary and this was better than any hotel we've ever booked. Two floors, a fireplace, and a view that made us feel like we owned the city. Will absolutely be booking direct again next trip.",
-    name: "James & Lauren T.",
-    unit: "Penthouse 5602 · October 2024",
-  },
-  {
-    quote:
-      "Traveling for work and needed space to decompress. Found this through a Google search and so glad I didn't book through Airbnb. Saved money, got a direct line to the host, and the Jewel-Osco in the building was a game changer.",
-    name: "Marcus D.",
-    unit: "Penthouse 5801 · September 2024",
-  },
-];
+import { prisma } from "@/lib/prisma";
+import { getContentBlock } from "@/lib/content";
+import { CONTENT_DEFAULTS } from "@/lib/contentDefaults";
 
 function StarRow({ size }: { size: number }) {
   return (
@@ -37,7 +19,16 @@ function StarRow({ size }: { size: number }) {
   );
 }
 
-export default function Testimonials() {
+export default async function Testimonials() {
+  const [rows, header] = await Promise.all([
+    prisma.testimonial.findMany({
+      where: { published: true },
+      orderBy: { order: "asc" },
+    }),
+    getContentBlock("home", "testimonialsHeader", CONTENT_DEFAULTS.home.testimonialsHeader),
+  ]);
+  const testimonials = rows.map((t) => ({ quote: t.quote, name: t.name, unit: t.propertyLabel ?? "" }));
+
   return (
     <section className="py-16 lg:py-24" style={{ background: "rgb(250, 250, 250)" }}>
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
@@ -55,7 +46,7 @@ export default function Testimonials() {
               textTransform: "uppercase",
             }}
           >
-            GUEST EXPERIENCES
+            {header.eyebrow}
           </p>
 
           <h2
@@ -66,7 +57,7 @@ export default function Testimonials() {
               color: "rgb(17, 17, 17)",
             }}
           >
-            What Our Guests Say
+            {header.heading}
           </h2>
 
           {/* Stars + rating */}
@@ -80,7 +71,7 @@ export default function Testimonials() {
                 fontWeight: 400,
               }}
             >
-              5.0 · 200+ stays
+              {header.ratingLabel}
             </span>
           </div>
         </div>

@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+// CMS-owned overlay on top of a live Guesty listing. Guesty remains the
+// source of truth for pricing/availability/core photos — this only
+// supplements it with marketing fields the admin can edit.
+model ListingContent {
+  id              String   @id @default(cuid())
+  guestyListingId String   @unique
+  description     String?
+  showOnHomepage  Boolean  @default(false)
+  homepageOrder   Int?
+  photoUrls       String[] @default([])
+  seoTitle        String?
+  seoDescription  String?
+  updatedAt       DateTime @updatedAt
+}
+
+model Faq {
+  id        String   @id @default(cuid())
+  category  String
+  question  String
+  answer    String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Testimonial {
+  id            String   @id @default(cuid())
+  name          String
+  quote         String
+  propertyLabel String?
+  published     Boolean  @default(true)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+}
+
+// Editable copy for marketing pages, keyed by page slug + a block key
+// within that page (e.g. page="home", key="whyBookDirect"). Value is
+// freeform JSON so each block can hold whatever shape that page needs.
+model ContentBlock {
+  id        String   @id @default(cuid())
+  page      String
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([page, key])
+}
+
+model ContactEnquiry {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String
+  source    String   @default("contact-form")
+  createdAt DateTime @default(now())
+}
+
+model SiteSetting {
+  key   String @id
+  value String
+}
+
+// Rows for the /compare table (us vs. Airbnb vs. VRBO), full CRUD like Faq.
+model CompareRow {
+  id      String @id @default(cuid())
+  feature String
+  direct  String
+  airbnb  String
+  vrbo    String
+  order   Int    @default(0)
+}

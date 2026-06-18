@@ -1,6 +1,22 @@
 import Link from "next/link";
+import { getSiteSettings } from "@/lib/settings";
+import { getContentBlock } from "@/lib/content";
+import { CONTENT_DEFAULTS } from "@/lib/contentDefaults";
 
-export default function Footer() {
+const DEFAULTS = {
+  address: "Grand Plaza\nRiver North, Chicago IL",
+  contactEmail: "info@penthousesgrandplaza.com",
+};
+
+export default async function Footer() {
+  const [settings, footerCopy] = await Promise.all([
+    getSiteSettings(["address", "contactEmail"]),
+    getContentBlock("home", "footer", CONTENT_DEFAULTS.home.footer),
+  ]);
+  const address = settings.address ?? DEFAULTS.address;
+  const contactEmail = settings.contactEmail ?? DEFAULTS.contactEmail;
+  const copyrightLine = footerCopy.copyrightLine;
+
   return (
     <footer style={{ background: "rgb(10, 11, 13)", color: "rgb(255, 255, 255)" }}>
       <div className="max-w-7xl mx-auto px-6 lg:px-8 py-16 lg:py-20">
@@ -50,8 +66,7 @@ export default function Footer() {
                 color: "rgba(255, 255, 255, 0.85)",
               }}
             >
-              Luxury penthouse living in the heart of Chicago&apos;s River North. Eleven
-              exceptional residences, 50+ floors above the city.
+              {footerCopy.description}
             </p>
 
             <div className="mt-6 flex items-center gap-2">
@@ -71,7 +86,7 @@ export default function Footer() {
                   color: "rgb(198, 163, 85)",
                 }}
               >
-                WALK SCORE: 100
+                {footerCopy.walkScoreLabel}
               </span>
             </div>
           </div>
@@ -136,16 +151,19 @@ export default function Footer() {
               }}
             >
               <p>
-                Grand Plaza
-                <br />
-                River North, Chicago IL
+                {address.split("\n").map((line, i) => (
+                  <span key={i}>
+                    {line}
+                    {i < address.split("\n").length - 1 && <br />}
+                  </span>
+                ))}
               </p>
               <a
-                href="mailto:info@penthousesgrandplaza.com"
+                href={`mailto:${contactEmail}`}
                 className="block text-white/80 hover:text-white transition-colors"
                 style={{ textDecoration: "none" }}
               >
-                info@penthousesgrandplaza.com
+                {contactEmail}
               </a>
               <Link
                 href="/book"
@@ -174,7 +192,7 @@ export default function Footer() {
               color: "rgba(255, 255, 255, 0.5)",
             }}
           >
-            © 2025 The Penthouses at Grand Plaza. All rights reserved.
+            {copyrightLine}
           </p>
           <div className="flex gap-6">
             <Link

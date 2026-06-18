@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
@@ -11,6 +12,14 @@ export async function POST(req: Request) {
         { error: "Name, email, subject, and message are required." },
         { status: 400 }
       );
+    }
+
+    try {
+      await prisma.contactEnquiry.create({ data: { name, email, phone, subject, message } });
+    } catch (dbErr) {
+      // Don't fail the request over this — the email send below is still the
+      // primary delivery path, this is just a searchable backup log.
+      console.error("Failed to persist contact enquiry:", dbErr);
     }
 
     const apiKey = process.env.RESEND_API_KEY;

@@ -1,6 +1,14 @@
 import Link from "next/link";
+import { getContentBlock } from "@/lib/content";
+import { CONTENT_DEFAULTS } from "@/lib/contentDefaults";
 
-export default function GrandPlazaExperience() {
+export default async function GrandPlazaExperience() {
+  const content = await getContentBlock(
+    "home",
+    "grandPlazaExperience",
+    CONTENT_DEFAULTS.home.grandPlazaExperience
+  );
+
   return (
     <div style={{ background: "rgb(255, 255, 255)" }}>
       <div className="max-w-7xl mx-auto px-6 lg:px-8 py-16 lg:py-24">
@@ -19,7 +27,7 @@ export default function GrandPlazaExperience() {
                 textTransform: "uppercase",
               }}
             >
-              The Grand Plaza Experience
+              {content.eyebrow}
             </p>
 
             <h2
@@ -32,10 +40,10 @@ export default function GrandPlazaExperience() {
                 lineHeight: 1.08,
               }}
             >
-              Above the City.
+              {content.heading}
               <br />
               <em style={{ fontStyle: "italic", fontWeight: 300 }}>
-                Beyond the Ordinary.
+                {content.headingEmphasis}
               </em>
             </h2>
 
@@ -49,9 +57,7 @@ export default function GrandPlazaExperience() {
                 lineHeight: 1.75,
               }}
             >
-              Set high above downtown Chicago, The Penthouses at Grand Plaza
-              combine privacy, space, and skyline views for guests who want more
-              than a standard hotel stay.
+              {content.body}
             </p>
 
             <Link
@@ -67,7 +73,7 @@ export default function GrandPlazaExperience() {
                 textDecoration: "none",
               }}
             >
-              LEARN MORE
+              {content.buttonLabel}
             </Link>
           </div>
 
@@ -75,7 +81,7 @@ export default function GrandPlazaExperience() {
           <div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="https://media.base44.com/images/public/6a19a1ea36ff0cb3ba316a87/c3a0cccc5_13_540NStateSt_5506_2_DiningRoom_HiRes.jpg"
+              src={content.image}
               alt="Grand Plaza penthouse living and dining space"
               className="w-full object-cover"
               style={{ height: "clamp(280px, 40vw, 480px)", display: "block" }}

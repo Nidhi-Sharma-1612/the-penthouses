@@ -115,8 +115,8 @@ function mapDetail(r: GuestyListing): ListingDetail {
   };
 }
 
-export async function fetchListings(): Promise<ListingCard[]> {
-  if (cache._listingsCache && Date.now() < cache._listingsCache.expiresAt) {
+export async function fetchListings(force = false): Promise<ListingCard[]> {
+  if (!force && cache._listingsCache && Date.now() < cache._listingsCache.expiresAt) {
     return cache._listingsCache.data;
   }
   const res = await bookingEngineFetchWithRetry("/api/listings?limit=50");

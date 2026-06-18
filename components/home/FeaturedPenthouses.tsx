@@ -1,18 +1,31 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { fetchListings, type ListingCard } from "@/lib/listings";
+import { prisma } from "@/lib/prisma";
+import { getContentBlock } from "@/lib/content";
+import { CONTENT_DEFAULTS } from "@/lib/contentDefaults";
 
 async function getFeatured(): Promise<ListingCard[]> {
   try {
     const all = await fetchListings();
-    return all.slice(0, 3);
+    const overrides = await prisma.listingContent.findMany({ where: { showOnHomepage: true } });
+
+    if (overrides.length === 0) return all.slice(0, 3);
+
+    const orderById = new Map(overrides.map((o) => [o.guestyListingId, o.homepageOrder ?? 0]));
+    return all
+      .filter((listing) => orderById.has(listing.id))
+      .sort((a, b) => orderById.get(a.id)! - orderById.get(b.id)!);
   } catch {
     return [];
   }
 }
 
 export default async function FeaturedPenthouses() {
-  const penthouses = await getFeatured();
+  const [penthouses, header] = await Promise.all([
+    getFeatured(),
+    getContentBlock("home", "featuredPenthouses", CONTENT_DEFAULTS.home.featuredPenthouses),
+  ]);
 
   return (
     <div style={{ background: "rgb(255, 255, 255)", paddingBottom: "80px" }}>
@@ -21,14 +34,14 @@ export default async function FeaturedPenthouses() {
         {/* Header row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-7">
           <p style={{ fontFamily: "Inter, sans-serif", fontSize: "10px", letterSpacing: "0.18em", fontWeight: 500, color: "rgb(26, 26, 26)", textTransform: "uppercase" }}>
-            Penthouses Designed for the Way You Live
+            {header.eyebrow}
           </p>
           <Link
             href="/penthouses"
             className="hover:opacity-60 transition-opacity flex items-center gap-1.5 shrink-0"
             style={{ fontFamily: "Inter, sans-serif", fontSize: "10px", letterSpacing: "0.12em", fontWeight: 500, color: "rgb(26, 26, 26)", textDecoration: "none" }}
           >
-            VIEW ALL PENTHOUSES
+            {header.viewAllLabel}
             <ArrowRight width={13} height={13} strokeWidth={2} />
           </Link>
         </div>

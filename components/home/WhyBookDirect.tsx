@@ -1,33 +1,14 @@
 import Link from "next/link";
 import { DollarSign, Phone, Clock, Shield } from "lucide-react";
+import { getContentBlock } from "@/lib/content";
+import { CONTENT_DEFAULTS } from "@/lib/contentDefaults";
 
-const benefits = [
-  {
-    icon: DollarSign,
-    title: "$0 Service Fees",
-    description: "No Airbnb or VRBO platform fees added to your rate",
-  },
-  {
-    icon: Phone,
-    title: "Direct Concierge Access",
-    description:
-      "Personal contact with our team before, during, and after your stay",
-  },
-  {
-    icon: Clock,
-    title: "Easy Check-In",
-    description:
-      "We provide everything you need before arrival, including detailed instructions and direct support if questions come up.",
-  },
-  {
-    icon: Shield,
-    title: "Best Rate Guaranteed",
-    description:
-      "Book direct and we guarantee you won't find it cheaper elsewhere",
-  },
-];
+const ICONS = [DollarSign, Phone, Clock, Shield];
 
-export default function WhyBookDirect() {
+export default async function WhyBookDirect() {
+  const content = await getContentBlock("home", "whyBookDirect", CONTENT_DEFAULTS.home.whyBookDirect);
+  const benefits = content.benefits.map((b, i) => ({ ...b, icon: ICONS[i] ?? DollarSign }));
+
   return (
     <section className="py-16 lg:py-24" style={{ background: "rgb(255, 255, 255)" }}>
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
@@ -45,7 +26,7 @@ export default function WhyBookDirect() {
               textTransform: "uppercase",
             }}
           >
-            WHY BOOK DIRECT
+            {content.eyebrow}
           </p>
 
           <h2
@@ -57,9 +38,9 @@ export default function WhyBookDirect() {
               lineHeight: 1.1,
             }}
           >
-            Skip the Platform.
+            {content.heading}
             <br />
-            <em style={{ fontStyle: "italic", fontWeight: 300 }}>Save 10–15%.</em>
+            <em style={{ fontStyle: "italic", fontWeight: 300 }}>{content.headingEmphasis}</em>
           </h2>
 
           <p
@@ -72,8 +53,7 @@ export default function WhyBookDirect() {
               lineHeight: 1.625,
             }}
           >
-            When you book directly with us, you get better pricing, more
-            flexibility, and a host who actually picks up the phone.
+            {content.body}
           </p>
         </div>
 
@@ -141,7 +121,7 @@ export default function WhyBookDirect() {
                 color: "rgba(255, 255, 255, 0.5)",
               }}
             >
-              LIMITED AVAILABILITY
+              {content.ctaEyebrow}
             </p>
 
             <h3
@@ -152,7 +132,7 @@ export default function WhyBookDirect() {
                 color: "rgb(255, 255, 255)",
               }}
             >
-              Reserve Your Penthouse
+              {content.ctaHeading}
             </h3>
 
             <p
@@ -163,8 +143,7 @@ export default function WhyBookDirect() {
                 color: "rgba(255, 255, 255, 0.6)",
               }}
             >
-              11 exclusive residences. Book direct for the best rate and a
-              personal experience.
+              {content.ctaBody}
             </p>
 
             <Link

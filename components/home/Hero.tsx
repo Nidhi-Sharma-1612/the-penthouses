@@ -1,6 +1,10 @@
 import Link from "next/link";
+import { getContentBlock } from "@/lib/content";
+import { CONTENT_DEFAULTS } from "@/lib/contentDefaults";
 
-export default function Hero() {
+export default async function Hero() {
+  const content = await getContentBlock("home", "hero", CONTENT_DEFAULTS.home.hero);
+
   return (
     <div
       className="relative overflow-hidden"
@@ -13,7 +17,7 @@ export default function Hero() {
       {/* Background image */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="https://media.base44.com/images/public/6a19a1ea36ff0cb3ba316a87/f8ab9408a_5506croppedmainphoto.jpg"
+        src={content.image}
         alt="Chicago penthouse living room with skyline and lake views"
         className="absolute inset-0 w-full h-full object-cover"
         style={{ objectPosition: "center 35%" }}
@@ -42,7 +46,7 @@ export default function Hero() {
             textTransform: "uppercase",
           }}
         >
-          50+ Floors Above River North
+          {content.eyebrow}
         </p>
 
         {/* Headline */}
@@ -56,9 +60,9 @@ export default function Hero() {
             lineHeight: 1.05,
           }}
         >
-          Luxury Penthouses.
+          {content.heading}
           <br />
-          <em style={{ fontStyle: "italic", fontWeight: 300 }}>Unrivaled</em> Views.
+          <em style={{ fontStyle: "italic", fontWeight: 300 }}>{content.headingEmphasis}</em>
         </h1>
 
         {/* Description */}
@@ -72,8 +76,7 @@ export default function Hero() {
             lineHeight: 1.7,
           }}
         >
-          Extraordinary penthouses with sweeping skyline and lake views, impeccable
-          design, and all the space you need to live exceptionally.
+          {content.body}
         </p>
 
         {/* CTAs */}
@@ -91,7 +94,7 @@ export default function Hero() {
               textDecoration: "none",
             }}
           >
-            VIEW PENTHOUSES
+            {content.ctaPrimaryLabel}
           </Link>
           <Link
             href="/book"
@@ -106,7 +109,7 @@ export default function Hero() {
               textDecoration: "none",
             }}
           >
-            BOOK DIRECT
+            {content.ctaSecondaryLabel}
           </Link>
         </div>
       </div>
